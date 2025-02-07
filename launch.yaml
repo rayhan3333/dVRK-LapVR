@@ -1,0 +1,31 @@
+# This is the base file for Coordination Application
+world config: ./ADF/world/world_stereo.yaml
+# world config: ./ADF/world/world_stereo_test.yaml
+color config: ./ADF/color/colors.yaml
+input devices config: ./ADF/input_devices/input_devices.yaml
+
+multibody configs:
+  #3D MED PHANTOM
+  - "ADF/Phantoms/3D_MED/phantom.yaml" #0
+  - "ADF/Phantoms/3D_MED/ghosts.yaml" #1
+  #PSM LND 420006
+  - "ADF/PSMs/LND_420006/psm1.yaml" #2
+  - "ADF/PSMs/LND_420006/ghosts_actuators_psm1.yaml" #3
+  - "ADF/PSMs/LND_420006/psm2.yaml" #4
+  - "ADF/PSMs/LND_420006/ghosts_actuators_psm2.yaml" #5
+  #PSM LND 400006 SIMPLE
+  - "ADF/PSMs/LND_400006_SIMPLE/psm1.yaml" #6
+  - "ADF/PSMs/LND_400006_SIMPLE/ghosts_actuators_psm1.yaml" #7
+  - "ADF/PSMs/LND_400006_SIMPLE/psm2.yaml" #8
+  - "ADF/PSMs/LND_400006_SIMPLE/ghosts_actuators_psm2.yaml" #9
+  #SIMPLE PHANTOM
+  - "ADF/Phantoms/Simple/phantom.yaml" #10
+  - "ADF/Phantoms/Simple/ghosts.yaml" #11
+  #LapVr
+  - "ADF/LapVR/LapVR1.yaml" #12
+  - "ADF/LapVR/LapVR2.yaml" #13
+  - "ADF/LapVR/LapVR2_normal.yaml" #14
+  - "ADF/Haptic_demo/default.yaml" #15
+  - "ADF/LapVR/ghosts_actuators_LapVR2.yaml" #16
+  #Co-train phantom, work with 3D_MED ghost together
+  - "ADF/CoTrain/phantom.yaml" #17
