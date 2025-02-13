@@ -60,10 +60,10 @@ cameraL:
   field view angle: *cam_common_fov 
   monitor: 1
   parent: BODY CameraFrame
-  publish image: True
+  #publish image: True
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res 
-  publish depth: True
+  #publish depth: True
   publish depth resolution: *cam_common_pub_depth_res
   multipass: True # Set to True to enable shadows
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
@@ -82,11 +82,11 @@ cameraL2:
     path: ../../../ambf_shaders/preprocessing
     vertex: shader.vs
     fragment: shader.fs
-  publish image: True
+  #publish image: True
   visible: False
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
-  publish depth: False
+  #publish depth: False
   publish depth resolution: *cam_common_pub_depth_res
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
   # multipass: True
@@ -101,10 +101,10 @@ cameraR:
   field view angle: *cam_common_fov 
   monitor: 2
   parent: BODY CameraFrame
-  publish image: True
+  #publish image: True
   publish image interval: 5
   publish image resolution: *cam_common_pub_img_res
-  publish depth: True
+  #publish depth: True
   publish depth resolution: *cam_common_pub_depth_res
   visible: True
   mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }

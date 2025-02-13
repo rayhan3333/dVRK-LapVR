@@ -118,7 +118,7 @@ rospy.init_node('lapvr_node')
 # Initialize the clients and board controllers
 board9 = BoardController(9) # right
 
-_client = Client()
+_client = Client("lapvr")
 _client.connect()
 base2 = _client.get_obj_handle('/ambf/env/lapvr2/baselink')
 left_finger_ghost = _client.get_obj_handle('/ambf/env/ghosts/lapvr2/left_finger_ghost')
@@ -185,9 +185,9 @@ while not rospy.is_shutdown():
         grasped = False
 
     # use velocity to predit the position
-    predit_pos_0 = base2.get_joint_pos(0) + base2.get_joint_vel(0) * 0.05
-    predit_pos_1 = base2.get_joint_pos(1) + base2.get_joint_vel(1) * 0.05
-    predit_pos_2 = base2.get_joint_pos(2) + base2.get_joint_vel(2) * 0.05
+    predit_pos_0 = base2.get_joint_pos(0) + base2.get_joint_vel(0) * 0.001
+    predit_pos_1 = base2.get_joint_pos(1) + base2.get_joint_vel(1) * 0.001
+    predit_pos_2 = base2.get_joint_pos(2) + base2.get_joint_vel(2) * 0.001
 
     # calculate the error
     latest_error['x'] = predit_pos_0 - x_curr_9 
@@ -213,9 +213,9 @@ while not rospy.is_shutdown():
     # print(yaw_curr_9)
     # print(" ")
 
-    board9.write_current(0, currentAdjust(latest_error['x'], 0))
-    board9.write_current(1, currentAdjust(-latest_error['y'], 1))
-    board9.write_current(2, currentAdjust(latest_error['z'], 2))
+    # board9.write_current(0, currentAdjust(latest_error['x'], 0))
+    # board9.write_current(1, currentAdjust(-latest_error['y'], 1))
+    # board9.write_current(2, currentAdjust(latest_error['z'], 2))
 
 
     time.sleep(0.01)
