@@ -302,7 +302,7 @@ BODY Cover12:
       r: 0
       p: 0
       y: 0
-  passive: true
+  passive: false
   publish children names: false
   publish joint names: false
   publish joint positions: false
@@ -314,7 +314,9 @@ BODY Cover12:
     angular: 0.1000000015
     linear: 0.0399999991
   visible: true
-  collision groups: []
+  collision groups: 
+  - 10
+  - 11
   collision shape: BOX
   collision geometry:
     x: 0.0047405516
@@ -442,7 +444,9 @@ BODY Cover22:
     angular: 0.1000000015
     linear: 0.0399999991
   visible: true
-  collision groups: []
+  collision groups: 
+  - 10
+  - 11
   collision shape: BOX
   collision geometry:
     x: 0.0047405516
@@ -570,7 +574,9 @@ BODY Cover32:
     angular: 0.1000000015
     linear: 0.0399999991
   visible: true
-  collision groups: []
+  collision groups: 
+  - 10
+  - 11
   collision shape: BOX
   collision geometry:
     x: 0.0047405516
@@ -698,7 +704,9 @@ BODY Cover42:
     angular: 0.1000000015
     linear: 0.0399999991
   visible: true
-  collision groups: []
+  collision groups: 
+  - 10
+  - 11
   collision shape: BOX
   collision geometry:
     x: 0.0047405516
@@ -4465,7 +4473,7 @@ JOINT Cover11-Cover12:
   joint limits:
     high: 0.0099999998
     low: 0.0
-  enable feedback: false
+  enable feedback: true
   passive: true
   controller output type: VELOCITY
   type: linear spring

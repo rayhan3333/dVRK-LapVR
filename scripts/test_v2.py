@@ -61,7 +61,7 @@ def map_value(x, min_input, max_input, min_output, max_output):
 
 def currentAdjust(error, idx):
     if idx == 2:
-        max_error = 0.05
+        max_error = 0.04
         max_current_change = 8192
         if abs(error) < 0.02:
             percent = 0
@@ -157,14 +157,19 @@ while not rospy.is_shutdown():
     z9 = data9[2]
     yaw9 = data9[3]
 
-    yaw_curr_9 = map_value(yaw9, yaw_limit_9 - yaw_range, yaw_limit_9, 1, -2.14)
+    
     x_curr_9 = map_value(x9, x_limit_9 - x_range, x_limit_9, 1, -1) 
     y_curr_9 = map_value(y9, y_limit_9, y_limit_9 + y_range, 1, -1)
     z_curr_9 = map_value(z9, z_limit_9, z_limit_9 + z_range, 0, 0.17)
+    # z_curr_9 = map_value(z9, z_limit_9, z_limit_9 + z_range, 0.17, -0.17)
+    yaw_curr_9 = map_value(yaw9, yaw_limit_9 - yaw_range, yaw_limit_9, 1, -2.14)
+    # yaw_curr_9 = map_value(yaw9, yaw_limit_9 - yaw_range, yaw_limit_9, 2.57, -0.57)
     data9 = board9.get_pot()
-    gripper9 = map_value(data9[0], 22100, 28000, -1, 0)
+    # gripper9 = map_value(data9[0], 22100, 28000, -1, 0)
+    gripper9 = map_value(data9[0], 22100, 28000, 1, 0)
 
-    if  gripper9 > -0.05:
+    # if  gripper9 > -0.05:
+    if  gripper9 < 0.05:
         if not grasped:
             sensed_object_names = left_finger_ghost.get_all_sensed_obj_names()
             sensed_object_names = sensed_object_names + right_finger_ghost.get_all_sensed_obj_names()
@@ -185,9 +190,9 @@ while not rospy.is_shutdown():
         grasped = False
 
     # use velocity to predit the position
-    predit_pos_0 = base2.get_joint_pos(0) + base2.get_joint_vel(0) * 0.001
-    predit_pos_1 = base2.get_joint_pos(1) + base2.get_joint_vel(1) * 0.001
-    predit_pos_2 = base2.get_joint_pos(2) + base2.get_joint_vel(2) * 0.001
+    predit_pos_0 = base2.get_joint_pos(0) + base2.get_joint_vel(0) * 0.05
+    predit_pos_1 = base2.get_joint_pos(1) + base2.get_joint_vel(1) * 0.05
+    predit_pos_2 = base2.get_joint_pos(2) + base2.get_joint_vel(2) * 0.05
 
     # calculate the error
     latest_error['x'] = predit_pos_0 - x_curr_9 
@@ -204,8 +209,17 @@ while not rospy.is_shutdown():
     base2.set_joint_pos(1, y_curr_9)
     base2.set_joint_pos(2, z_curr_9)
     base2.set_joint_pos(3, yaw_curr_9)
-    base2.set_joint_pos(4, gripper9)
     base2.set_joint_pos(5, gripper9)
+    base2.set_joint_pos(6, gripper9)
+    # base2.set_joint_pos(4, 0)
+    # base2.set_joint_pos(5, 0)
+    # base2.set_joint_pos(6, gripper9)
+    # base2.set_joint_pos(7, gripper9)
+    
+    # print(base2.get_joint_pos(0))
+    # print(base2.get_joint_pos(1))
+    # print(base2.get_joint_pos(2))
+    # print(" ")
 
     # print(x_curr_9)
     # print(y_curr_9)
@@ -213,9 +227,9 @@ while not rospy.is_shutdown():
     # print(yaw_curr_9)
     # print(" ")
 
-    # board9.write_current(0, currentAdjust(latest_error['x'], 0))
-    # board9.write_current(1, currentAdjust(-latest_error['y'], 1))
-    # board9.write_current(2, currentAdjust(latest_error['z'], 2))
+    board9.write_current(0, currentAdjust(latest_error['x'], 0))
+    board9.write_current(1, currentAdjust(-latest_error['y'], 1))
+    board9.write_current(2, currentAdjust(latest_error['z'], 2))
 
 
     time.sleep(0.01)
