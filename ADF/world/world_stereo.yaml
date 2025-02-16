@@ -1,6 +1,6 @@
 enclosure size: { length: 10.0, width: 10.0, height: 3.0 }
 lights: [light2]
-cameras: [cameraL, cameraR, cameraL2]
+cameras: [cameraL, cameraR, cameraFA]
 environment: "./checkered_floor.yaml"
 namespace: /ambf/env/
 max iterations: 50
@@ -53,6 +53,24 @@ cam common configs:
 cameraL:
   namespace: cameras/
   name: cameraL
+  location: { x: -0.002, y: 0.0, z: -0.05 }
+  look at: { x: 0.0, y: 0.0, z: -1.0 }
+  up: { x: 0.0, y: 1.0, z: 0.0 }
+  clipping plane: *cam_common_clipping_plane
+  field view angle: *cam_common_fov 
+  monitor: 1
+  parent: BODY CameraFrame
+  #publish image: True
+  publish image interval: 5
+  publish image resolution: *cam_common_pub_img_res 
+  #publish depth: True
+  publish depth resolution: *cam_common_pub_depth_res
+  multipass: True # Set to True to enable shadows
+  mouse control multipliers: { pan: 0.1, rotate: 1.0, scroll: 0.1, arcball: 0.1 }
+  
+cameraFA:
+  namespace: cameras/
+  name: cameraFA
   location: { x: -0.002, y: 0.0, z: -0.05 }
   look at: { x: 0.0, y: 0.0, z: -1.0 }
   up: { x: 0.0, y: 1.0, z: 0.0 }
