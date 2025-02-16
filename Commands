@@ -23,5 +23,5 @@ roslaunch dvrk_video decklink_stereo_1280x1024.launch stereo_rig_name:=test
 On lcsr-qla:
 ssh -X lcsr-qla
 export ROS_MASTER_URI=http://lcsr-dvrk-09:11311
-cd dVRK/LapVR-scripts
+cd dVRK-LapVR/LapVR-scripts
 python test_v2.py
