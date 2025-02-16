@@ -1,0 +1,27 @@
+On lcsr-dvrk-09:
+ssh -X lcsr-dvrk-09
+roscore
+
+Open a new terminal on lcsr-dvrk-09
+ssh -X lcsr-dvrk-09
+export ROS_MASTER_URI=http://lcsr-dvrk-09:11311
+cd dVRK-LapVR
+./run_env_LND_440006.sh
+
+On lcsr-dvrk-09:
+#simulation
+qlacommand -c close-relays
+cd dvrk/src/dvrk/dvrk_config_jhu/jhu-daVinci
+rosrun dvrk_robot dvrk_console_json -j console-MTML-MTMR.json 
+cd dVRK-LapVR/scripts/surgical_robotics_challenge/teleoperation/
+./mtm_psm_pair_teleop_420006.sh 
+
+#physical
+rosrun dvrk_robot dvrk_console_json -j console-SUJ-ECM-MTMR-PSM1-MTML-PSM2-Teleop.json -p 0.005
+roslaunch dvrk_video decklink_stereo_1280x1024.launch stereo_rig_name:=test
+
+On lcsr-qla:
+ssh -X lcsr-qla
+export ROS_MASTER_URI=http://lcsr-dvrk-09:11311
+cd dVRK/LapVR-scripts
+python test_v2.py
