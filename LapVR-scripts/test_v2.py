@@ -62,20 +62,41 @@ def map_value(x, min_input, max_input, min_output, max_output):
 def currentAdjust(error, idx):
     if idx == 2:
         max_error = 0.04
-        max_current_change = 8192
-        if abs(error) < 0.02:
-            percent = 0
-        else:
-            percent = max(-1, min(error / max_error, 1))
+        max_current_change = 4096
+        deadband = 0.005
     else:
-        max_error = 0.4  
-        max_current_change = 8192 
-        if abs(error) < 0.2:
-            percent = 0
-        else:
-            percent = max(-1, min(error / max_error, 1))  # Clamp percent between -1 and 1
+        max_error = 0.4
+        max_current_change = 4096
+        deadband = 0.05
 
-    return int(32768 + max_current_change * percent) & 0xFFFFFFFF
+    if abs(error) < deadband:
+        percent = 0.0
+    else:
+        norm_error = max(-1.0, min(error / max_error, 1.0))
+        # Smooth sigmoid-like scaling
+        percent = math.tanh(2.5 * norm_error)  # you can tune 2.5
+
+    desired_current = int(32768 + max_current_change * percent) & 0xFFFFFFFF
+    return desired_current
+
+
+# def currentAdjust(error, idx):
+#     if idx == 2:
+#         max_error = 0.04
+#         max_current_change = 8192
+#         if abs(error) < 0.02:
+#             percent = 0
+#         else:
+#             percent = max(-1, min(error / max_error, 1))
+#     else:
+#         max_error = 0.4  
+#         max_current_change = 8192 
+#         if abs(error) < 0.2:
+#             percent = 0
+#         else:
+#             percent = max(-1, min(error / max_error, 1))  # Clamp percent between -1 and 1
+
+#     return int(32768 + max_current_change * percent) & 0xFFFFFFFF
 
 def calibrate_handle(board, handle_name):
     print(f"Press Enter to stop calibration for {handle_name} and save limits.")
@@ -184,6 +205,6 @@ while not rospy.is_shutdown():
     board9.write_current(2, currentAdjust(latest_error['z'], 2))
 
 
-    time.sleep(0.01)
+    time.sleep(0.001)
     
 board9.cleanup()
