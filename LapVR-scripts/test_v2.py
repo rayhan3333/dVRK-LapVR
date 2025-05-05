@@ -4,6 +4,7 @@ import rospy
 from ambf_client import Client
 from ambf_msgs.msg import ObjectState, WorldState
 import time
+import math
 
 class BoardController:
     def __init__(self, board_id):
@@ -74,7 +75,8 @@ def currentAdjust(error, idx):
     else:
         norm_error = max(-1.0, min(error / max_error, 1.0))
         # Smooth sigmoid-like scaling
-        percent = math.tanh(2.5 * norm_error)  # you can tune 2.5
+        # percent = math.tanh(2.5 * norm_error)
+        percent = norm_error ** 3
 
     desired_current = int(32768 + max_current_change * percent) & 0xFFFFFFFF
     return desired_current
