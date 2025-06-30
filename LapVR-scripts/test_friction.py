@@ -81,25 +81,6 @@ def currentAdjust(error, idx):
     desired_current = int(32768 + max_current_change * percent) & 0xFFFFFFFF
     return desired_current
 
-
-# def currentAdjust(error, idx):
-#     if idx == 2:
-#         max_error = 0.04
-#         max_current_change = 8192
-#         if abs(error) < 0.02:
-#             percent = 0
-#         else:
-#             percent = max(-1, min(error / max_error, 1))
-#     else:
-#         max_error = 0.4  
-#         max_current_change = 8192 
-#         if abs(error) < 0.2:
-#             percent = 0
-#         else:
-#             percent = max(-1, min(error / max_error, 1))  # Clamp percent between -1 and 1
-
-#     return int(32768 + max_current_change * percent) & 0xFFFFFFFF
-
 def calibrate_handle(board, handle_name):
     print(f"Press Enter to stop calibration for {handle_name} and save limits.")
     while True:
@@ -108,16 +89,21 @@ def calibrate_handle(board, handle_name):
             x_center = data[0]
             y_center = data[1]
             z_center = data[2]
-            roll_center = data[3]
+            yaw_center = data[3]
             time.sleep(2)
             if input() == '':
                 break
         except KeyboardInterrupt:
             break
     print(f"Calibration stopped. Centers for {handle_name} are saved.")
-    print(f"{handle_name} Centers: {x_center} {y_center} {z_center} {roll_center}\n")
-    return x_center, y_center, z_center, roll_center
+    print(f"{handle_name} Centers: {x_center} {y_center} {z_center} {yaw_center}\n")
+    return x_center, y_center, z_center, yaw_center
 
+def force_callback(msg):
+    global latest_force
+    latest_force['x'] = msg.wrench.force.x
+    latest_force['y'] = msg.wrench.force.y
+    latest_force['z'] = msg.wrench.force.z
 
 rospy.init_node('lapvr_node')
 # Initialize the clients and board controllers
@@ -128,21 +114,25 @@ base2 = _client.get_obj_handle('/ambf/env/lapvr2/baselink')
 left_finger_ghost = _client.get_obj_handle('/ambf/env/ghosts/lapvr2/left_finger_ghost')
 right_finger_ghost = _client.get_obj_handle('/ambf/env/ghosts/lapvr2/right_finger_ghost')
 actuator = _client.get_obj_handle('/ambf/env/ghosts/lapvr2/Actuator0')
+latest_force = {'x': 0.0, 'y': 0.0, 'z': 0.0}
 latest_error = {'x': 0.0, 'y': 0.0, 'z': 0.0}
+frozen_position = {'x': 0.0, 'y': 0.0, 'z': 0.0}
 grasped = False
+position_frozen = False
 graspable_objs_prefix = ["Needle", "Thread", "Puzzle", "Cover"]
-roll_range = 6182 # hardcoded
+yaw_range = 6182 # hardcoded
 x_range = 9780
 y_range = 9583
 z_range = 21848
+rospy.Subscriber('/ambf/env/lapvr2/toolrolllink/State', ObjectState, force_callback)
 
 # Calibrate right handle (board 9)
-x_center_9, y_center_9, z_center_9, roll_center_9 = calibrate_handle(board9, "right handle")
+x_center_9, y_center_9, z_center_9, yaw_center_9 = calibrate_handle(board9, "right handle")
 
 x_limit_9 = x_center_9 + x_range / 2
 y_limit_9 = y_center_9 - y_range / 2
 z_limit_9 = z_center_9
-roll_limit_9 = roll_center_9 + roll_range / 3
+yaw_limit_9 = yaw_center_9 + yaw_range / 3
 
 # Enable motors after calibration completes
 board9.calibrated = True
@@ -154,12 +144,13 @@ while not rospy.is_shutdown():
     x9 = data9[0]
     y9 = data9[1]
     z9 = data9[2]
-    roll9 = data9[3]
+    yaw9 = data9[3]
+    fx, fy, fz = latest_force['x'], latest_force['y'], latest_force['z']
     
     x_curr_9 = map_value(x9, x_limit_9 - x_range, x_limit_9, 1, -1) 
     y_curr_9 = map_value(y9, y_limit_9, y_limit_9 + y_range, 1, -1)
     z_curr_9 = map_value(z9, z_limit_9, z_limit_9 + z_range, 0, 0.17)
-    roll_curr_9 = map_value(roll9, roll_limit_9 - roll_range, roll_limit_9, 1, -2.14)
+    yaw_curr_9 = map_value(yaw9, yaw_limit_9 - yaw_range, yaw_limit_9, 1, -2.14)
     data9 = board9.get_pot()
     gripper9 = map_value(data9[0], 22100, 28000, 1, 0)
 
@@ -193,18 +184,48 @@ while not rospy.is_shutdown():
     latest_error['y'] = predit_pos_1 - y_curr_9
     latest_error['z'] = predit_pos_2 - z_curr_9
 
-    # Apply the transformed values to the appropriate joints for board 9
-    base2.set_joint_pos(0, x_curr_9)
-    base2.set_joint_pos(1, y_curr_9)
-    base2.set_joint_pos(2, z_curr_9)
-    base2.set_joint_pos(3, roll_curr_9)
+    # detect contact and sliding
+    sliding_detected = False
+    if abs(fz) > 300 and (abs(fx) > 50 or abs(fy) > 50):
+        sliding_detected = True
+
+    if sliding_detected:
+        if not position_frozen:
+            # Save frozen position when contact begins
+            frozen_position['x'] = base2.get_joint_pos(0)
+            frozen_position['y'] = base2.get_joint_pos(1)
+            frozen_position['z'] = base2.get_joint_pos(2)
+            position_frozen = True
+
+        # Apply resisting effort to keep tool near frozen position
+        stiffness = 10.0  # Adjust as needed
+        damping = 20.0
+
+        for i, axis in enumerate(['x', 'y', 'z']):
+            joint_idx = i  # joint indices: 0, 1, 2
+            curr_pos = base2.get_joint_pos(joint_idx)
+            curr_vel = base2.get_joint_vel(joint_idx)
+            error = frozen_position[axis] - curr_pos
+            effort = stiffness * error - damping * curr_vel
+            base2.set_joint_effort(joint_idx, effort)
+    else:
+        position_frozen = False
+        # Normal control when not in contact
+        base2.set_joint_effort(0, 0)
+        base2.set_joint_effort(1, 0)
+        base2.set_joint_effort(2, 0)
+        base2.set_joint_pos(0, x_curr_9)
+        base2.set_joint_pos(1, y_curr_9)
+        base2.set_joint_pos(2, z_curr_9)
+
+    # Always set yaw and gripper
+    base2.set_joint_pos(3, yaw_curr_9)
     base2.set_joint_pos(5, gripper9)
     base2.set_joint_pos(6, gripper9)
 
     board9.write_current(0, currentAdjust(latest_error['x'], 0))
     board9.write_current(1, currentAdjust(-latest_error['y'], 1))
     board9.write_current(2, currentAdjust(latest_error['z'], 2))
-
 
     time.sleep(0.001)
     

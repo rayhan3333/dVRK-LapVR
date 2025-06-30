@@ -25,7 +25,7 @@ multibody configs:
   - "ADF/LapVR/LapVR1.yaml" #12
   - "ADF/LapVR/LapVR2.yaml" #13
   - "ADF/LapVR/LapVR2_normal.yaml" #14
-  - "ADF/Haptic_demo/default.yaml" #15
+  - "ADF/Haptic_demo/demo.yaml" #15
   - "ADF/LapVR/ghosts_actuators_LapVR2.yaml" #16
   #Co-train phantom, work with 3D_MED ghost together
   - "ADF/CoTrain/phantom.yaml" #17
