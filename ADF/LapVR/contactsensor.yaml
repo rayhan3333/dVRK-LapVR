@@ -1,0 +1,20 @@
+bodies: []
+joints: []
+sensors: [SENSOR Contact]
+high resolution path: ../
+low resolution path: ../
+ignore inter-collision: true
+namespace: /ambf/env/lapvr2
+
+SENSOR Contact:
+  name: tip_sensor
+  type: Contact
+  parent: lapvr2/BODY tool roll link
+  location:
+    position: {x: 0.0, y: 0.0, z: 0.23}
+    orientation: {r: 0.0, p: 0.0, y: 0.0}
+  range: 0.1
+  visible: true
+  visible size: 0.01
+
+

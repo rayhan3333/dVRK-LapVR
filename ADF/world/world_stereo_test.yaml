@@ -26,7 +26,7 @@ light2:
   direction: { x: 0, y: 0.0, z: -1.0 }
   attenuation: {constant: 0.8, linear: 0.8, quadratic: 0.0}
   spot exponent: 0.9 #Not used in the SRC
-  shadow quality: 0
+  shadow quality: 1
   cutoff angle: 1.6
   parent: BODY CameraFrame
 

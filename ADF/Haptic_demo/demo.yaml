@@ -54,8 +54,8 @@ BODY Plane:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 1.0
-    static: 10.0
+    rolling: 10000.0
+    static: 10000.0
   restitution: 0.1
   damping:
     angular: 0.1
@@ -112,8 +112,8 @@ BODY Plane_001:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 1.0
-    static: 10.0
+    rolling: 10000.0
+    static: 10000.0
   restitution: 0.1
   damping:
     angular: 0.1
@@ -170,8 +170,8 @@ BODY Plane_002:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 1.0
-    static: 10.0
+    rolling: 10000.0
+    static: 10000.0
   restitution: 0.1
   damping:
     angular: 0.1
@@ -228,8 +228,8 @@ BODY Plane_003:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 1.0
-    static: 10.0
+    rolling: 10000.0
+    static: 10000.0
   restitution: 0.1
   damping:
     angular: 0.1
@@ -286,8 +286,8 @@ BODY Plane_004:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 1.0
-    static: 10.0
+    rolling: 10000.0
+    static: 10000.0
   restitution: 0.1
   damping:
     angular: 0.1
@@ -343,7 +343,7 @@ BODY BlackGround:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 0.0
+    rolling: 10000.0
     static: 0.5
   restitution: 0.1000000015
   damping:

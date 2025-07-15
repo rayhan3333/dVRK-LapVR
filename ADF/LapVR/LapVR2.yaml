@@ -361,8 +361,8 @@ BODY tool roll link:
   publish joint names: false
   publish joint positions: false
   friction:
-    rolling: 1.0
-    static: 1.0
+    rolling: 10000.0
+    static: 10000.0
   restitution: 0.0
   damping:
     angular: 0.1
@@ -397,6 +397,12 @@ BODY tool roll link:
       g: 0.01346
       r: 0.01323
     transparency: 1.0
+  sensors:
+    - name: tool_tip_contact_sensor
+      type: Contact
+      location: [0.0, 0.0, 0.225]          # adjust Z forward along tool axis
+      orientation: [0.0, 0.0, 0.0]         # no rotation
+
 BODY tool yaw link:
   name: tool yaw link
   mesh: tool yaw link.STL
