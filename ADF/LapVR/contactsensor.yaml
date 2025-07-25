@@ -11,7 +11,7 @@ SENSOR Contact:
   type: Contact
   parent: lapvr2/BODY tool roll link
   location:
-    position: {x: 0.0, y: 0.0, z: 0.23}
+    position: {x: 0.0, y: 0.0, z: 0.24}
     orientation: {r: 0.0, p: 0.0, y: 0.0}
   range: 0.1
   visible: true

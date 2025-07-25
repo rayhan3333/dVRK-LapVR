@@ -18,7 +18,7 @@ gravity:
   x: 0.0
   y: 0.0
   z: 0.0
-namespace: /ambf/env/lapvr2/
+namespace: /ambf/env/
 BODY Plane:
   name: Plane
   mesh: Plane.STL

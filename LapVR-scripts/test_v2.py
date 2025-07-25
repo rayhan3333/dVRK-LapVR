@@ -187,6 +187,10 @@ while not rospy.is_shutdown():
     predit_pos_0 = base2.get_joint_pos(0) + base2.get_joint_vel(0) * 0.05
     predit_pos_1 = base2.get_joint_pos(1) + base2.get_joint_vel(1) * 0.05
     predit_pos_2 = base2.get_joint_pos(2) + base2.get_joint_vel(2) * 0.05
+    print(base2.get_joint_vel(0))
+    print(base2.get_joint_vel(1))
+    print(base2.get_joint_vel(2))
+    print()
 
     # calculate the error
     latest_error['x'] = predit_pos_0 - x_curr_9 

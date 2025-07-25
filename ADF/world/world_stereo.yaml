@@ -24,10 +24,10 @@ light2:
   name: light2
   location: { x: 0.0, y: 0.0, z: 0.0 }
   direction: { x: 0, y: 0.0, z: -1.0 }
-  attenuation: {constant: 0.8, linear: 0.8, quadratic: 0.0}
+  # attenuation: {constant: 0.8, linear: 0.8, quadratic: 0.0}
   spot exponent: 0.9 #Not used in the SRC
-  shadow quality: 0
-  cutoff angle: 1.6
+  shadow quality: 3
+  cutoff angle: 0.7
   parent: BODY CameraFrame
 
 light3:

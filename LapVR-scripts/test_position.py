@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import Amp1394Python as Amp
 import rospy, time, math
 import numpy as np
@@ -8,7 +6,6 @@ from scipy.spatial.transform import Rotation as R
 
 from ambf_msgs.msg import ObjectState
 
-# --- Board Controller ---
 class BoardController:
     def __init__(self, board_id):
         self.port = Amp.PortFactory("")
@@ -27,18 +24,29 @@ class BoardController:
         time.sleep(1)
         self.port.WriteAllBoards()
 
+    # get raw encoder data
     def get_encoders(self):
         self.port.ReadAllBoards()
-        return [self.board.GetEncoderPosition(i) for i in range(4)]
+        encoder = [0, 0, 0, 0]
+        for i in range(4):
+            encoder[i] = self.board.GetEncoderPosition(i)
+        return encoder
 
+    # get raw potentiometer data
     def get_pot(self):
         self.port.ReadAllBoards()
-        return [self.board.GetAnalogInput(i) for i in range(4)]
+        pot = [0, 0, 0, 0]
+        for i in range(4):
+            pot[i] = self.board.GetAnalogInput(i)
+        return pot
 
     def write_current(self, axis, magnitude):
         if self.calibrated:
             self.board.SetMotorCurrent(axis, magnitude)
             self.port.WriteAllBoards()
+
+    def get_current(self, axis):
+        return self.board.GetMotorCurrent(axis)
 
     def cleanup(self):
         for i in range(4):
@@ -48,40 +56,48 @@ class BoardController:
         self.port.WriteAllBoards()
         self.port.RemoveBoard(self.board.GetBoardId())
 
-# --- Helper Functions ---
+# linear mapping for joint positions
 def map_value(x, min_input, max_input, min_output, max_output):
     return (x - min_input) / (max_input - min_input) * (max_output - min_output) + min_output
 
-def currentAdjust(contact_force, axis):
-    max_force = 1.5  # Customize max expected force per axis
-    max_current_change = 4096             # Max current deviation from neutral
+def currentAdjust(error, idx):
+    if idx == 2:
+        max_error = 0.04
+        max_current_change = 4096
+        deadband = 0.005
+    else:
+        max_error = 0.4
+        max_current_change = 4096
+        deadband = 0.05
 
-    # Optional deadband to ignore small noise forces
-    if np.isclose(contact_force, 0.0, atol=0.05):
+    if abs(error) < deadband:
         percent = 0.0
     else:
-        # Clamp force within expected range
-        norm_force = np.clip(contact_force / max_force, -1.0, 1.0)
-        # percent = norm_force ** 3  # Smooth non-linear scaling
-        # percent = math.tanh(2.5 * norm_force)
-        percent = norm_force
+        norm_error = max(-1.0, min(error / max_error, 1.0))
+        # Smooth sigmoid-like scaling
+        # percent = math.tanh(2.5 * norm_error)
+        percent = norm_error ** 3
 
-    # Compute current: base + delta
-    return int(32768 + max_current_change * percent) & 0xFFFFFFFF
+    desired_current = int(32768 + max_current_change * percent) & 0xFFFFFFFF
+    return desired_current
 
 def calibrate_handle(board, handle_name):
     print(f"Press Enter to stop calibration for {handle_name} and save limits.")
     while True:
         try:
             data = board.get_encoders()
-            x_center, y_center, z_center, roll_center = data
+            x_center = data[0]
+            y_center = data[1]
+            z_center = data[2]
+            yaw_center = data[3]
             time.sleep(2)
             if input() == '':
                 break
         except KeyboardInterrupt:
             break
-    print(f"{handle_name} Centers: {x_center} {y_center} {z_center} {roll_center}\n")
-    return x_center, y_center, z_center, roll_center
+    print(f"Calibration stopped. Centers for {handle_name} are saved.")
+    print(f"{handle_name} Centers: {x_center} {y_center} {z_center} {yaw_center}\n")
+    return x_center, y_center, z_center, yaw_center
 
 def get_contact_force(sensor, tool):
     # Get insertion axis in world frame (z-axis of tool)
@@ -90,7 +106,7 @@ def get_contact_force(sensor, tool):
     R_tool = R.from_quat(quat_list).as_dcm()
     insertion_axis_world = R_tool[:, 2]  # z-axis of tool in world frame
 
-    k_stiffness = 50000.0
+    k_stiffness = 10000.0
     mu = 0.4
     contact_force = np.zeros(3)
     total_insertion_force = 0.0
@@ -118,33 +134,14 @@ def get_contact_force(sensor, tool):
         total_insertion_force += insertion_force
 
     for i in range(2):
-        print(base2.get_joint_vel(i))
         if np.isclose(base2.get_joint_vel(i), 0.0, atol=0.1):
             contact_force[i] = 0
         else:
-            contact_force[i] = -mu * abs(total_insertion_force) * np.sign(base2.get_joint_vel(i))
+            contact_force[i] = -mu * total_insertion_force * np.sign(base2.get_joint_vel(i))
     contact_force[2] = total_insertion_force
 
     return contact_force
 
-def stabilize_force(raw_force, velocity, filtered_force):
-    # alpha = 0.9  # Low-pass filter coefficient
-    # damping_coeff = 0.0000000001
-    alpha = 1  # Low-pass filter coefficient
-    damping_coeff = 0.0
-    max_force = 3.0  # Safety clamp
-    # Low-pass filter
-    filtered_force = alpha * raw_force + (1 - alpha) * filtered_force
-
-    # Smoothed friction + damping model
-    damping_force = -damping_coeff * velocity
-    total_force = filtered_force + damping_force
-
-    # Clamp to safe limits
-    total_force = np.clip(total_force, -max_force, max_force)
-    return total_force, filtered_force
-
-# --- Main Execution ---
 rospy.init_node('lapvr_node')
 board9 = BoardController(9)
 _client = Client("lapvr")
@@ -168,20 +165,21 @@ board9.calibrated = True
 board9.enable_motors()
 
 grasped = False
+position_frozen = False
 graspable_objs_prefix = ["Needle", "Thread", "Puzzle", "Cover"]
 contact_objs_prefix = ["Plane", "phantom"]
 latest_error = {'x': 0.0, 'y': 0.0, 'z': 0.0}
-filtered_contact_force = np.zeros(3)
+frozen_position = {'x': 0.0, 'y': 0.0, 'z': 0.0}
 
 while not rospy.is_shutdown():
     x9, y9, z9, roll9 = board9.get_encoders()
-    x_curr = map_value(x9, x_limit_9 - x_range, x_limit_9, 1, -1)
-    y_curr = map_value(y9, y_limit_9, y_limit_9 + y_range, 1, -1)
-    z_curr = map_value(z9, z_limit_9, z_limit_9 + z_range, 0, 0.17)
-    roll_curr = map_value(roll9, roll_limit_9 - roll_range, roll_limit_9, 1, -2.14)
-    gripper = map_value(board9.get_pot()[0], 22100, 28000, 1, 0)
+    x_curr_9 = map_value(x9, x_limit_9 - x_range, x_limit_9, 1, -1)
+    y_curr_9 = map_value(y9, y_limit_9, y_limit_9 + y_range, 1, -1)
+    z_curr_9 = map_value(z9, z_limit_9, z_limit_9 + z_range, 0, 0.17)
+    roll_curr_9 = map_value(roll9, roll_limit_9 - roll_range, roll_limit_9, 1, -2.14)
+    gripper_9 = map_value(board9.get_pot()[0], 22100, 28000, 1, 0)
 
-    if gripper < 0.05:
+    if gripper_9 < 0.05:
         if not grasped:
             sensed = left_finger_ghost.get_all_sensed_obj_names() + right_finger_ghost.get_all_sensed_obj_names()
             for prefix in graspable_objs_prefix:
@@ -193,44 +191,55 @@ while not rospy.is_shutdown():
         actuator.deactuate()
         grasped = False
 
-    # Force feedback
-    raw_contact_force = get_contact_force(tool_sensor, tool_handle)
-    print(raw_contact_force)
-    velocities = np.array([
-        base2.get_joint_vel(0),
-        base2.get_joint_vel(1),
-        base2.get_joint_vel(2)
-    ])
+    # use velocity to predit the position
+    predit_pos_0 = base2.get_joint_pos(0) + base2.get_joint_vel(0) * 0.05
+    predit_pos_1 = base2.get_joint_pos(1) + base2.get_joint_vel(1) * 0.05
+    predit_pos_2 = base2.get_joint_pos(2) + base2.get_joint_vel(2) * 0.05
 
-    contact_force = np.zeros(3)
-    for i in range(3):
-        contact_force[i], filtered_contact_force[i] = stabilize_force(
-            raw_contact_force[i], velocities[i], filtered_contact_force[i]
-        )
-    print(contact_force)
-    print()
-    # Decide whether to use effort or position control
+    # calculate the error
+    latest_error['x'] = predit_pos_0 - x_curr_9 
+    latest_error['y'] = predit_pos_1 - y_curr_9
+    latest_error['z'] = predit_pos_2 - z_curr_9
 
-    if not np.allclose(contact_force[:2], 0.0, atol=1e-4):
-        base2.set_joint_effort(0, contact_force[0])
-        base2.set_joint_effort(1, contact_force[1])
-        # base2.set_joint_effort(2, contact_force[2])
-        # base2.set_joint_pos(0, x_curr)
-        # base2.set_joint_pos(1, y_curr)
-        base2.set_joint_pos(2, z_curr)
+    # detect contact and sliding
+    sliding_detected = False
+    contact_force = get_contact_force(tool_sensor, tool_handle)
+    if not np.allclose(contact_force, 0.0, atol=1):
+        sliding_detected = True
+
+    if sliding_detected:
+        if not position_frozen:
+            # Store current position ONCE when contact starts
+            frozen_position['x'] = base2.get_joint_pos(0)
+            frozen_position['y'] = base2.get_joint_pos(1)
+            frozen_position['z'] = base2.get_joint_pos(2)
+            position_frozen = True
+
+        # Freeze position at contact
+        print(frozen_position['x'])
+        print(frozen_position['y'])
+        print(frozen_position['z'])
+        print()
+        base2.set_joint_pos(0, frozen_position['x'])
+        base2.set_joint_pos(1, frozen_position['y'])
+        base2.set_joint_pos(2, frozen_position['z'])
     else:
-        base2.set_joint_pos(0, x_curr)
-        base2.set_joint_pos(1, y_curr)
-        base2.set_joint_pos(2, z_curr)
+        position_frozen = False
+        # Free to move
+        base2.set_joint_pos(0, x_curr_9)
+        base2.set_joint_pos(1, y_curr_9)
+        base2.set_joint_pos(2, z_curr_9)
 
-    base2.set_joint_pos(3, roll_curr)
-    base2.set_joint_pos(5, gripper)
-    base2.set_joint_pos(6, gripper)
+    # Always set yaw and gripper
+    base2.set_joint_pos(3, roll_curr_9)
+    base2.set_joint_pos(5, gripper_9)
+    base2.set_joint_pos(6, gripper_9)
 
-    board9.write_current(0, currentAdjust(contact_force[0], 0))
-    board9.write_current(1, currentAdjust(-contact_force[1], 1))
-    board9.write_current(2, currentAdjust(contact_force[2], 2))
+    board9.write_current(0, currentAdjust(latest_error['x'], 0))
+    board9.write_current(1, currentAdjust(-latest_error['y'], 1))
+    board9.write_current(2, currentAdjust(latest_error['z'], 2))
+
 
     time.sleep(0.001)
-
+    
 board9.cleanup()

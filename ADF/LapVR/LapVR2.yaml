@@ -66,7 +66,7 @@ BODY base link:
   damping:
     angular: 0.1
     linear: 0.04
-  visible: true
+  visible: false
   collision groups:
   - 0
   collision shape: CONE
@@ -185,7 +185,7 @@ BODY pitch end link:
   damping:
     angular: 0.1
     linear: 0.04
-  visible: true
+  visible: false
   collision groups:
   - 1
   collision shape: CYLINDER
@@ -397,12 +397,6 @@ BODY tool roll link:
       g: 0.01346
       r: 0.01323
     transparency: 1.0
-  sensors:
-    - name: tool_tip_contact_sensor
-      type: Contact
-      location: [0.0, 0.0, 0.225]          # adjust Z forward along tool axis
-      orientation: [0.0, 0.0, 0.0]         # no rotation
-
 BODY tool yaw link:
   name: tool yaw link
   mesh: tool yaw link.STL
@@ -503,7 +497,7 @@ BODY yaw link:
   damping:
     angular: 0.1
     linear: 0.04
-  visible: true
+  visible: false
   collision groups:
   - 0
   collision shape: CONE
