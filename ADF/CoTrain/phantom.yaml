@@ -222,8 +222,7 @@ BODY Cover11:
   scale: 1.0
   location:
     position:
-      x: 0.0182507858
-      #x: 0.0212507858
+      x: 0.0212507858
       y: 0.2762514651
       z: 0.7457998991
     orientation:
