@@ -12,6 +12,16 @@ from enum import Enum
 from ambf_client import Client
 from argparse import ArgumentParser
 from surgical_robotics_challenge import units_conversion
+from collections import defaultdict
+import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
+import threading
+import sys
+import time
+from queue import Queue, Empty
+from surgical_robotics_challenge import task_completion_report
+from surgical_robotics_challenge.utils.coordinate_frames import *
+
 
 
 def frame_to_pose_stamped_msg(frame):
@@ -64,17 +74,23 @@ def pose_msg_to_frame(msg):
 class GlobalParams:
     hole_count = 4
     # The Object Aligned Bounding Box (OABB) to check for needle tip
-    hole_bounds = Vector(0.005, 0.005, 0.005) # in SI
+    hole_bounds = Vector(0.01, 0.01, 0.01) # in SI
     insertion_depth_threshold = 0.001 # in SI
 
 
 class NeedleKinematics:
+    # # Base in Needle Origin
+    # T_bINn = Frame(Rotation.RPY(0., 0., 0.), Vector(-0.102, 0., 0.) / units_conversion.SimToSI.linear_factor)
+    # # Mid in Needle Origin
+    # T_mINn = Frame(Rotation.RPY(0., 0., -1.091), Vector(-0.048, 0.093, 0.) / units_conversion.SimToSI.linear_factor)
+    # # Tip in Needle Origin
+    # T_tINn = Frame(Rotation.RPY(0., 0., -0.585), Vector(0.056, 0.085, 0.) / units_conversion.SimToSI.linear_factor)
     # Base in Needle Origin
-    T_bINn = Frame(Rotation.RPY(0., 0., 0.), Vector(-0.102, 0., 0.) / units_conversion.SimToSI.linear_factor)
+    T_bINn = Needle.T_base_origin
     # Mid in Needle Origin
-    T_mINn = Frame(Rotation.RPY(0., 0., -1.091), Vector(-0.048, 0.093, 0.) / units_conversion.SimToSI.linear_factor)
+    T_mINn = Needle.T_mid_origin
     # Tip in Needle Origin
-    T_tINn = Frame(Rotation.RPY(0., 0., -0.585), Vector(0.056, 0.085, 0.) / units_conversion.SimToSI.linear_factor)
+    T_tINn = Needle.T_tip_origin
 
     def __init__(self):
         """
@@ -311,6 +327,7 @@ class SceneKinematicsFrame:
         self.T_holesINw = dict()
         self.T_holesINw[HoleType.ENTRY] = [Frame() for _ in range(GlobalParams.hole_count)]
         self.T_holesINw[HoleType.EXIT] = [Frame() for _ in range(GlobalParams.hole_count)]
+        self.T_coversINw = [Frame() for _ in range(GlobalParams.hole_count)]
         self.T_ntINw = Frame()
         self.t = 0.0
 
@@ -327,6 +344,28 @@ class SceneKinematicsFrame:
                     NCE.hole_idx = hidx
                     NCE.t = self.t
         return NCE
+
+    def isCoverRetracted(self):
+        min_distance = 0.004
+        for hidx in range(GlobalParams.hole_count):
+            #print(hidx)
+            T = self.T_coversINw[hidx].Inverse() * self.T_holesINw[HoleType.ENTRY][hidx]
+            #print(T.p.Norm())
+            if (T.p.Norm() > min_distance):
+                cover_event = CoverEvent()
+                cover_event.distance = T.p.Norm()
+                #print(hidx)
+                #print(cover_event.distance)
+                cover_event.t = self.t
+                cover_event.hole_idx = hidx
+                return True, cover_event
+        return False, None
+class CoverEvent:
+    def __init__(self):
+        self.distance = 100.0
+        self.t = 0.0
+        self.hole_idx = -1
+
 
 
 class NeedleContactEvent:
@@ -345,11 +384,15 @@ class NeedleContactEvent:
         :param T_ntINhole:
         :return:
         """
+        #if (T_ntINhole.p.Norm() < 0.08):
+         #   return True
         for j in range(3):
+            #print(abs(T_ntINhole.p[j]))
             if abs(T_ntINhole.p[j]) > GlobalParams.hole_bounds[j]:
                 # Needle tip is out of bounds, ignore
                 return False
         return True
+        #return False
 
 
 class ContactEventHelper:
@@ -383,6 +426,7 @@ class ContactEventHelper:
         for hole_type in HoleType:
             for hidx in range(GlobalParams.hole_count):
                 event_size = len(needle_holes_proximity_events[hole_type][hidx])
+                #print(event_size)
                 i_insertion = -1
                 if event_size < 2:
                     # No insertion to report as we only have a single point within hole's OABB
@@ -654,9 +698,10 @@ class Task_3_Evaluation():
         self._hole_objs = dict()
         self._hole_objs[HoleType.ENTRY] = []
         self._hole_objs[HoleType.EXIT] = []
+        #changed object path
         for i in range(GlobalParams.hole_count):
-            self._hole_objs[HoleType.ENTRY].append(client.get_obj_handle("Entry" + str(i+1)))
-            self._hole_objs[HoleType.EXIT].append(client.get_obj_handle("Exit" + str(i+1)))
+            self._hole_objs[HoleType.ENTRY].append(client.get_obj_handle("/ambf/env/Entry" + str(i+1)))
+            self._hole_objs[HoleType.EXIT].append(client.get_obj_handle("/ambf/env/Exit" + str(i+1)))
 
         self._scene_trajectories = deque()
         self._needle_holes_proximity_events = dict()
@@ -729,6 +774,7 @@ class Task_3_Evaluation():
         self._done = True
 
     def evaluate(self):
+        print("Evaluate is running")
         """
 
         :return:
@@ -736,6 +782,7 @@ class Task_3_Evaluation():
         t = 0.0
         while not self._done:
             time.sleep(0.01)
+            #print("hello")
             SKF = self.capture_scene_kinematics()
             self.compute_needle_hole_proximity_event(SKF)
             t = t + 0.01
@@ -792,6 +839,299 @@ class Task_3_Evaluation():
 
         self._report.print_report()
 
+class Task_4_Evaluation_Report():
+    def __init__(self):
+        """
+
+        """
+        self.team_name = None
+
+        # Needle protruding from the exit as the end of task
+        self.L_ntINexit_axial = None
+
+        # Cross-sectional distance from the exit hole's center
+        self.L_ntINexit_lateral = [None for _ in range(GlobalParams.hole_count)]
+
+        # Cross-sectional distance from the entry hole's center
+        self.L_ntINentry_lateral = [None for _ in range(GlobalParams.hole_count)]
+
+        self.entry_exit_idx = None
+
+        self.completion_time = None
+
+        self.L_coverDistance = [None for _ in range(GlobalParams.hole_count)]
+
+        self.L_reactionTimes = [None for _ in range(GlobalParams.hole_count)]
+
+        self.collisions_tool = 0
+
+
+
+        self.success = False
+
+    def print_report(self):
+        """
+
+        :return:
+        """
+        print('Team: ', self.team_name, ' Task 4 Completion Report: ')
+        if self.success:
+            print(OK_STR('\t Task Successful: '))
+            print('\t Completion Time: ', self.completion_time)
+            print('\t Needle Tip Axial Distance From Exit Hole (4/4) (Recommended {})'.format(GlobalParams.hole_bounds[0]), self.L_ntINexit_axial)
+            for hidx in range(GlobalParams.hole_count):
+                print('--------------------------------------------')
+                print('\t Hole Number: ', hidx + 1, '/', GlobalParams.hole_count)
+                print('\t Needle Tip Lateral Distance From Entry Hole During Insertion (Lower is Better): ',
+                      self.L_ntINentry_lateral[hidx])
+                print('\t Needle Tip Lateral Distance From Exit Hole During Insertion (Lower is Better): ',
+                      self.L_ntINexit_lateral[hidx])
+                print('\t Tissue Retraction Amount (Lower is Better): ',
+                      self.L_coverDistance[hidx])
+                print('\t Reaction Time between Tissue Retraction and Suture Enter ',
+                      self.L_reactionTimes[hidx])
+            print('\t Total collisions for First Assistant Tool ',
+                self.collisions_tool)   
+                
+        else:
+            print(FAIL_STR('Task Failed: '))
+
+class Task_4_Evaluation():
+    def __init__(self, client, team_name, gui_event=None):
+        """
+
+        :param client:
+        :param team_name:
+        :return:
+        """
+        self._gui_event = gui_event
+        self._world = client.get_world_handle()
+        self._needle_kinematics = NeedleKinematics()
+        self._hole_objs = dict()
+        self._hole_objs[HoleType.ENTRY] = []
+        self._hole_objs[HoleType.EXIT] = []
+        self._cover_objs = []
+        #changed object path
+        for i in range(GlobalParams.hole_count):
+            self._hole_objs[HoleType.ENTRY].append(client.get_obj_handle("/ambf/env/Entry" + str(i+1)))
+            self._hole_objs[HoleType.EXIT].append(client.get_obj_handle("/ambf/env/Exit" + str(i+1)))
+            self._cover_objs.append(client.get_obj_handle("ambf/env/Cover" + str((i+1)*10+1)))
+
+        self._scene_trajectories = deque()
+        self._needle_holes_proximity_events = dict()
+        self._needle_holes_proximity_events[HoleType.ENTRY] = [deque() for _ in range(GlobalParams.hole_count)]
+        self._needle_holes_proximity_events[HoleType.EXIT] = [deque() for _ in range(GlobalParams.hole_count)]
+        self._cover_move_events = [deque() for _ in range(GlobalParams.hole_count)]
+        self._tool_sensor = client.get_obj_handle('/ambf/env/lapvr2/tip_sensor')
+
+
+        self.contact_counts = defaultdict(int)
+        self.previous_contacts = set()
+        self.graspable_objs_prefix = ["Needle", "Thread", "Puzzle", "Cover"]
+
+        try:
+            rospy.init_node('challenge_evaluation_node')
+        except:
+            done_nothing = True
+        prefix = '/surgical_robotics_challenge/completion_report/' + team_name
+        self._task_sub = rospy.Subscriber(prefix + '/task3/', Bool, self.task_completion_cb, queue_size=1)
+
+        self._done = False
+        self._report = Task_4_Evaluation_Report()
+        self.task_report = task_completion_report.TaskCompletionReport(team_name)
+
+        self._report.team_name = team_name
+        self._entry_exit_idx = -1
+        self._start_time = rospy.Time.now().to_sec()
+        time.sleep(1.0)
+
+    def capture_scene_kinematics(self):
+        """
+
+        :return:
+        """
+        SKF = SceneKinematicsFrame()
+        SKF.t = self._world._state.sim_time
+        SKF.T_ntINw = self._needle_kinematics.get_tip_pose()
+
+        for hole_type in HoleType:
+            for i in range(GlobalParams.hole_count):
+                SKF.T_holesINw[hole_type][i] = units_conversion.get_pose(self._hole_objs[hole_type][i])
+                # print("hole |p|:", SKF.T_holesINw[hole_type][i].p.Norm(), 
+                #     "tip |p|:", SKF.T_ntINw.p.Norm())
+
+        for i in range(GlobalParams.hole_count):
+            SKF.T_coversINw[i] = units_conversion.get_pose(self._cover_objs[i])
+
+        self._scene_trajectories.append(SKF)
+        return SKF
+
+    def compute_needle_hole_proximity_event(self, SKF):
+        """
+
+        :param SKF:
+        :return:
+        """
+        proximity_events = []
+        for hole_type in HoleType:
+            for hidx in range(GlobalParams.hole_count):
+                T_ntINhole = SKF.T_holesINw[hole_type][hidx].Inverse() * SKF.T_ntINw
+                #print(str(hidx) + ": " + str(T_ntINhole.p.Norm()))
+                ne = NeedleContactEvent()
+                if ne.is_needle_intersecting_with_hole(T_ntINhole):
+                    ne.hole_type = hole_type
+                    ne.hole_idx = hidx
+                    ne.T_ntINhole = T_ntINhole
+                    ne.t = SKF.t
+                    # ContactEventHelper.validate_needle_event(hole_type, hidx, ne)
+                    (self._needle_holes_proximity_events[hole_type][hidx]).append(ne)
+                    proximity_events.append(ne)
+                    #print("found proximity event")
+                    # print('\t\t', ne.hole_type, ne.hole_idx, ne.T_ntINhole.p.Norm())
+        return proximity_events
+    def compute_cover_move_event(self, SKF):
+        isRetracted, coverEvent = SKF.isCoverRetracted()
+        if (isRetracted):
+            #print("Cover Retracted")
+            (self._cover_move_events[coverEvent.hole_idx]).append(coverEvent)
+        
+
+    def task_completion_cb(self, msg):
+        print("RUNNING TASK COMPLETION CB")
+        """
+
+        :param msg:
+        :return:
+        """
+        if msg.data is False:
+            print('Error!, Task 3 Completion Message must be True')
+
+        self._report.completion_time = rospy.Time.now().to_sec() - self._start_time
+        self._done = True
+
+   
+
+    def get_contacts(self, sensor):
+        current_contacts = set() 
+
+        for i in range(sensor.get_num_contact_events()):
+            obj_name = sensor.get_contact_object_name(i)
+            if obj_name is None:
+                continue
+            if any(prefix in obj_name for prefix in self.graspable_objs_prefix):
+                continue
+
+            current_contacts.add(obj_name)
+
+            if obj_name not in self.previous_contacts:
+                self.contact_counts[obj_name] += 1
+                print(f"[New contact] {obj_name} , Count: {self.contact_counts[obj_name]}")
+
+        self.previous_contacts = current_contacts.copy()
+    def evaluate(self):
+        print("Evaluate is running")
+        """
+
+        :return:
+        """
+        t = 0.0
+        while not self._done:
+            #print("Entering loop")
+            time.sleep(0.01)
+            #print("hello")
+            SKF = self.capture_scene_kinematics()
+            self.compute_needle_hole_proximity_event(SKF)
+            self.compute_cover_move_event(SKF)
+            self.get_contacts(self._tool_sensor)
+            #print("computed skf")
+
+            if self._gui_event is not None and self._gui_event.is_set():
+         
+                print("Done Button pressed")
+
+                self.task_report.task_3_report(True)
+                self._gui_event.clear()
+            t = t + 0.01
+            #self._cover_objs[0].set_pos(0.015, .2776, .744)
+
+            if t % 1.0 >= 0.99:
+                print(time.time(), ' ) Waiting for task completion report')
+                #print(self._cover_objs[0].get_pos())
+
+        SKF = self.capture_scene_kinematics()
+        print('Completion Report Submitted, Running evaluation')
+
+        NCE = SKF.find_closest_hole_to_needle_tip()
+
+        # self.validate_needle_insertion_events()
+
+        self._report.success = False # Initialize to false
+        if True:
+            insertion_events = ContactEventHelper.compute_insertion_events_from_proximity_events(
+                self._needle_holes_proximity_events)
+            for ie in insertion_events:
+                print('\t Successful insertion into', ie.hole_type, ie.hole_idx)
+            if len(insertion_events) < 2:
+                # Failed
+                print('Failed Task, Number of hole insertion events =', len(insertion_events), 'out of 8')
+                
+            else:
+                self._report.L_ntINexit_axial = ContactEventHelper.compute_axial_distance_from_hole(
+                    NCE.T_ntINhole)
+                self._report.success = True
+                correct_idx = GlobalParams.hole_count
+                for hidx in range(GlobalParams.hole_count):
+                    event0 = insertion_events[2*hidx]
+                    event1 = insertion_events[2*hidx+1]
+                    correct_idx = correct_idx - 1
+                    #if event0.hole_type is HoleType.EXIT and event0.hole_idx == correct_idx:
+                    if True:
+                        #if event1.hole_type is HoleType.ENTRY and event1.hole_idx == correct_idx:
+                        if True:
+                            self._report.L_ntINexit_lateral[hidx] = ContactEventHelper.compute_lateral_distance_from_hole(
+                                event0.T_ntINhole)
+                            self._report.L_ntINentry_lateral[hidx] = ContactEventHelper.compute_lateral_distance_from_hole(
+                                event1.T_ntINhole)
+                        else:
+                            # Failed
+                            print('Failed Task, Entry hole type / idx mismatch from closest type / idx')
+                            print('Closest Type: ', NCE.hole_type, ' Idx: ', correct_idx)
+                            print('Event1 Type: ', event1.hole_type, ' Idx: ', event1.hole_idx)
+                            self._report.success = False
+                    else:
+                        # Failed
+                        print('Failed Task, Exit hole type / idx mismatch from closest type / idx')
+                        print('Closest Type: ', NCE.hole_type, ' Idx: ', correct_idx)
+                        print('Event0 Type: ', event0.hole_type, ' Idx: ', event0.hole_idx)
+                        self._report.success = False
+
+                #Co-Train / Team Training Feedback
+                self._report.collisions_tool = sum(self.contact_counts.values())
+                for hidx in range(GlobalParams.hole_count):
+                    enter_event = insertion_events[6-2*hidx]
+                    print("HIDX: ", hidx)
+                    print("Length of cover event: ", len(self._cover_move_events[hidx]))
+                    for event in self._cover_move_events[hidx]:
+                        print("Insertion Time: ", enter_event.t)
+                        print("Cover time: ", event.t)
+                        if (abs(enter_event.t - event.t) < 0.1):
+                            self._report.L_coverDistance[hidx] = event.distance
+                            print("Found retraction amount")
+                    if (len(self._cover_move_events[hidx]) > 0):
+                        print("Reaction Time Enter: ", enter_event.t)
+                        print("Reaction Time First Cover Lift: ", self._cover_move_events[hidx][0].t)
+                        self._report.L_reactionTimes[hidx] = enter_event.t - self._cover_move_events[hidx][0].t
+
+                        
+                    
+
+
+
+        else:
+            print('Failed Task, The closest hole to needle tip and report completion is not of type ', HoleType.EXIT)
+
+        self._report.print_report()
+
 
 def evaluate(args):
     client = Client('surgical_robotics_task_evaluation')
@@ -799,7 +1139,7 @@ def evaluate(args):
 
     team_name = args.team_name
     task_to_evaluate = int(args.task_evaluation)
-    if task_to_evaluate not in [1, 2, 3]:
+    if task_to_evaluate not in [1, 2, 3, 4]:
         raise Exception('ERROR! Acceptable task evaluation options (-e option) are 1, 2 or 3')
 
     task_eval = None
@@ -809,18 +1149,110 @@ def evaluate(args):
         task_eval = Task_2_Evaluation(client, team_name)
     elif task_to_evaluate == 3:
         task_eval = Task_3_Evaluation(client, team_name)
+    elif task_to_evaluate == 4:
+        task_eval = Task_4_Evaluation(client, team_name)
 
     task_eval.evaluate()
     print(OK_STR('GOOD BYE'))
+
+class StreamToQueue:
+    def __init__(self, q): self.q = q
+    def write(self, msg):
+        if msg: self.q.put(msg)
+    def flush(self): pass
+
+class EvalGUI:
+    def __init__(self, root, parsed_args):
+        self.root = root
+        self.root.title("Task Evaluation + GUI")
+
+        self.gui_event = threading.Event()
+        self.stop_event = threading.Event()
+
+        top = tk.Frame(root)
+        top.pack(padx=8, pady=6, anchor="w")
+
+        tk.Button(top, text="Complete Suture", width=14, command=self.on_click).pack(side=tk.LEFT, padx=4)
+        tk.Button(top, text="Quit", width=10, command=self.on_quit).pack(side=tk.LEFT, padx=4)
+
+        self.log = ScrolledText(root, wrap=tk.WORD, height=26, width=100, state="disabled")
+        self.log.pack(padx=8, pady=6, fill="both", expand=True)
+
+        self.log_q = Queue()
+        sys.stdout = StreamToQueue(self.log_q)
+        sys.stderr = StreamToQueue(self.log_q)
+
+        self.worker = threading.Thread(target=self.run_evaluator, args=(parsed_args,), daemon=True)
+        self.worker.start()
+
+        self.root.after(50, self.drain_log)
+
+        self.root.protocol("WM_DELETE_WINDOW", self.on_quit)
+
+    def on_click(self):
+        self.gui_event.set()
+        print("[GUI] Button clicked -> suture complete, wait for feedback")
+
+    def on_quit(self):
+        print("[GUI] Quitting…")
+        self.stop_event.set()
+        self.root.after(150, self.root.destroy)
+
+    def drain_log(self):
+        try:
+            while True:
+                msg = self.log_q.get_nowait()
+                self.log.configure(state="normal")
+                self.log.insert(tk.END, msg)
+                self.log.see(tk.END)
+                self.log.configure(state="disabled")
+        except Empty:
+            pass
+        self.root.after(50, self.drain_log)
+
+    def run_evaluator(self, parsed_args):
+       
+        client = Client('surgical_robotics_task_evaluation')
+        client.connect()
+
+        team_name = parsed_args.team_name
+        task_to_evaluate = int(parsed_args.task_evaluation)
+        if task_to_evaluate not in [1, 2, 3, 4]:
+            raise Exception('ERROR! Acceptable task evaluation options (-e option) are 1, 2, 3 or 4')
+
+        task_eval = None
+        if task_to_evaluate == 1:
+            task_eval = Task_1_Evaluation(client, team_name)
+        elif task_to_evaluate == 2:
+            task_eval = Task_2_Evaluation(client, team_name)
+        elif task_to_evaluate == 3:
+            task_eval = Task_3_Evaluation(client, team_name)
+        elif task_to_evaluate == 4:
+            task_eval = Task_4_Evaluation(client, team_name, gui_event=self.gui_event)
+
+        task_eval.evaluate()
+        print(OK_STR('GOOD BYE'))
+# if __name__ == "__main__":
+#     parser = ArgumentParser()
+#     parser.add_argument('-t', action='store', dest='team_name', help='Team Name', default='test_team')
+#     parser.add_argument('-e', action='store', dest='task_evaluation', help='Task to evaluate (1,2 or 3)')
+
+#     parsed_args = parser.parse_args()
+#     print('Specified Arguments')
+#     print(parsed_args)
+#     evaluate(parsed_args)
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-t', action='store', dest='team_name', help='Team Name', default='test_team')
-    parser.add_argument('-e', action='store', dest='task_evaluation', help='Task to evaluate (1,2 or 3)')
-
+    parser.add_argument('-e', action='store', dest='task_evaluation', help='Task to evaluate (1,2,3,4)', required=True)
     parsed_args = parser.parse_args()
-    print('Specified Arguments')
-    print(parsed_args)
-    evaluate(parsed_args)
 
+    try:
+        rospy.init_node('challenge_evaluation_node')
+    except:
+        done_nothing = True
+    root = tk.Tk()
+    EvalGUI(root, parsed_args)
+    root.mainloop()

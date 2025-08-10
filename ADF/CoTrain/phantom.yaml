@@ -223,6 +223,7 @@ BODY Cover11:
   location:
     position:
       x: 0.0182507858
+      #x: 0.0212507858
       y: 0.2762514651
       z: 0.7457998991
     orientation:
@@ -238,7 +239,7 @@ BODY Cover11:
       r: 0
       p: 0
       y: 0
-  passive: true
+  passive: false
   publish children names: false
   publish joint names: false
   publish joint positions: false
@@ -368,7 +369,7 @@ BODY Cover21:
       r: 0
       p: 0
       y: 0
-  passive: true
+  passive: false
   publish children names: false
   publish joint names: false
   publish joint positions: false
@@ -498,7 +499,7 @@ BODY Cover31:
       r: 0
       p: 0
       y: 0
-  passive: true
+  passive: false
   publish children names: false
   publish joint names: false
   publish joint positions: false
@@ -628,7 +629,7 @@ BODY Cover41:
       r: 0
       p: 0
       y: 0
-  passive: true
+  passive: false
   publish children names: false
   publish joint names: false
   publish joint positions: false
