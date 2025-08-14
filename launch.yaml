@@ -31,3 +31,5 @@ multibody configs:
   - "ADF/CoTrain/phantom.yaml" #17
   #LapVr Sensor
   - "ADF/LapVR/contactsensor.yaml" #18
+  - "ADF/PSMs/LND_420006/contactsensor1.yaml" #19
+  - "ADF/PSMs/LND_420006/contactsensor2.yaml" #20

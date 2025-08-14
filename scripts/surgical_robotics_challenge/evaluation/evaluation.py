@@ -423,8 +423,11 @@ class ContactEventHelper:
     @staticmethod
     def compute_insertion_events_from_proximity_events(needle_holes_proximity_events):
         hole_insertion_events = []
+        excess_insertions = []
         for hole_type in HoleType:
             for hidx in range(GlobalParams.hole_count):
+                #searching_excess = False
+                hole_insertions = 0
                 event_size = len(needle_holes_proximity_events[hole_type][hidx])
                 #print(event_size)
                 i_insertion = -1
@@ -446,7 +449,14 @@ class ContactEventHelper:
                                 break
                         else:
                             raise Exception('Cannot Happen')
+                    for ev in range(i_insertion-1, 0, -1):
+                        z1 = needle_holes_proximity_events[hole_type][hidx][ev].T_ntINhole.p[2]
+                        z0 = needle_holes_proximity_events[hole_type][hidx][ev-1].T_ntINhole.p[2]
 
+                        if hole_type is HoleType.ENTRY:
+                            if z1 < 0. < z0:
+                                #i_insertion = ev
+                                hole_insertions +=1
                     # For debugging
                     if i_insertion == -1:
                         depths = []
@@ -461,9 +471,10 @@ class ContactEventHelper:
                     NCE = needle_holes_proximity_events[hole_type][hidx][i_insertion]
                     # ContactEventHelper.validate_needle_event(hole_type, hidx, NCE, print_output=True)
                     hole_insertion_events.append(NCE)
+                    excess_insertions.append(hole_insertions)
         # Sort the list based on time events
         hole_insertion_events.sort(key=lambda x: x.t, reverse=True)
-        return hole_insertion_events
+        return hole_insertion_events, excess_insertions
 
     @staticmethod
     def compute_axial_distance_from_hole(T_ntINhole):
@@ -607,7 +618,7 @@ class Task_2_Evaluation():
 
         self._report.success = False # Initialize to false
         if NCE.hole_type is HoleType.EXIT:
-            insertion_events = ContactEventHelper.compute_insertion_events_from_proximity_events(
+            insertion_events, ignore = ContactEventHelper.compute_insertion_events_from_proximity_events(
                 self._needle_holes_proximity_events)
             if len(insertion_events) < 2:
                 # Failed
@@ -799,7 +810,7 @@ class Task_3_Evaluation():
 
         self._report.success = False # Initialize to false
         if NCE.hole_type is HoleType.EXIT:
-            insertion_events = ContactEventHelper.compute_insertion_events_from_proximity_events(
+            insertion_events, ignore = ContactEventHelper.compute_insertion_events_from_proximity_events(
                 self._needle_holes_proximity_events)
             if len(insertion_events) < 8:
                 # Failed
@@ -865,6 +876,10 @@ class Task_4_Evaluation_Report():
 
         self.collisions_tool = 0
 
+        self.collisions_psm = 0
+
+        self.excess_punctures = [0 for _ in range(GlobalParams.hole_count)]
+
 
 
         self.success = False
@@ -884,6 +899,8 @@ class Task_4_Evaluation_Report():
                 print('\t Hole Number: ', hidx + 1, '/', GlobalParams.hole_count)
                 print('\t Needle Tip Lateral Distance From Entry Hole During Insertion (Lower is Better): ',
                       self.L_ntINentry_lateral[hidx])
+                print('\t Extraneous Puncture Count ',
+                      self.excess_punctures[hidx])
                 print('\t Needle Tip Lateral Distance From Exit Hole During Insertion (Lower is Better): ',
                       self.L_ntINexit_lateral[hidx])
                 print('\t Tissue Retraction Amount (Lower is Better): ',
@@ -891,7 +908,9 @@ class Task_4_Evaluation_Report():
                 print('\t Reaction Time between Tissue Retraction and Suture Enter ',
                       self.L_reactionTimes[hidx])
             print('\t Total collisions for First Assistant Tool ',
-                self.collisions_tool)   
+                self.collisions_tool)
+            print('\t Total collisions for PSM ',
+                self.collisions_psm)
                 
         else:
             print(FAIL_STR('Task Failed: '))
@@ -923,11 +942,18 @@ class Task_4_Evaluation():
         self._needle_holes_proximity_events[HoleType.EXIT] = [deque() for _ in range(GlobalParams.hole_count)]
         self._cover_move_events = [deque() for _ in range(GlobalParams.hole_count)]
         self._tool_sensor = client.get_obj_handle('/ambf/env/lapvr2/tip_sensor')
+        self._psm1_sensor = client.get_obj_handle('/ambf/env/psm1/tip_sensor_psm1')
+        self._psm2_sensor = client.get_obj_handle('/ambf/env/psm2/tip_sensor_psm2')
+
 
 
         self.contact_counts = defaultdict(int)
         self.previous_contacts = set()
         self.graspable_objs_prefix = ["Needle", "Thread", "Puzzle", "Cover"]
+
+        self.contact_counts_psm = defaultdict(int)
+        self.previous_contacts_psm = set()
+        self.graspable_objs_prefix_psm = ["Needle", "Thread", "Puzzle", "Cover"]
 
         try:
             rospy.init_node('challenge_evaluation_node')
@@ -1028,6 +1054,36 @@ class Task_4_Evaluation():
                 print(f"[New contact] {obj_name} , Count: {self.contact_counts[obj_name]}")
 
         self.previous_contacts = current_contacts.copy()
+
+    def get_contacts_psm(self, sensor1, sensor2):
+        current_contacts_psm = set() 
+
+        for i in range(sensor1.get_num_contact_events()):
+            obj_name = sensor1.get_contact_object_name(i)
+            if obj_name is None:
+                continue
+            if any(prefix in obj_name for prefix in self.graspable_objs_prefix_psm):
+                continue
+
+            current_contacts_psm.add(obj_name)
+
+            if obj_name not in self.previous_contacts_psm:
+                self.contact_counts_psm[obj_name] += 1
+                print(f"[New contact] {obj_name} , Count: {self.contact_counts_psm[obj_name]}")
+        for i in range(sensor2.get_num_contact_events()):
+            obj_name = sensor2.get_contact_object_name(i)
+            if obj_name is None:
+                continue
+            if any(prefix in obj_name for prefix in self.graspable_objs_prefix_psm):
+                continue
+
+            current_contacts_psm.add(obj_name)
+
+            if obj_name not in self.previous_contacts_psm:
+                self.contact_counts_psm[obj_name] += 1
+                print(f"[New contact] {obj_name} , Count: {self.contact_counts_psm[obj_name]}")
+        self.previous_contacts_psm = current_contacts_psm.copy()
+
     def evaluate(self):
         print("Evaluate is running")
         """
@@ -1043,6 +1099,7 @@ class Task_4_Evaluation():
             self.compute_needle_hole_proximity_event(SKF)
             self.compute_cover_move_event(SKF)
             self.get_contacts(self._tool_sensor)
+            self.get_contacts_psm(self._psm1_sensor, self._psm2_sensor)
             #print("computed skf")
 
             if self._gui_event is not None and self._gui_event.is_set():
@@ -1067,8 +1124,9 @@ class Task_4_Evaluation():
 
         self._report.success = False # Initialize to false
         if True:
-            insertion_events = ContactEventHelper.compute_insertion_events_from_proximity_events(
+            insertion_events, excess_insertions = ContactEventHelper.compute_insertion_events_from_proximity_events(
                 self._needle_holes_proximity_events)
+            self._report.excess_punctures = excess_insertions
             for ie in insertion_events:
                 print('\t Successful insertion into', ie.hole_type, ie.hole_idx)
             if len(insertion_events) < 2:
@@ -1107,6 +1165,7 @@ class Task_4_Evaluation():
 
                 #Co-Train / Team Training Feedback
                 self._report.collisions_tool = sum(self.contact_counts.values())
+                self._report.collisions_psm = sum(self.contact_counts_psm.values())
                 for hidx in range(GlobalParams.hole_count):
                     enter_event = insertion_events[6-2*hidx]
                     print("HIDX: ", hidx)
