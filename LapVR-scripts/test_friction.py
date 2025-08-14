@@ -90,8 +90,8 @@ def get_contact_force(sensor, tool):
     R_tool = R.from_quat(quat_list).as_dcm()
     insertion_axis_world = R_tool[:, 2]  # z-axis of tool in world frame
 
-    k_stiffness = 50000.0
-    mu = 0.4
+    k_stiffness = 30000.0
+    mu = 0.6
     contact_force = np.zeros(3)
     total_insertion_force = 0.0
 
