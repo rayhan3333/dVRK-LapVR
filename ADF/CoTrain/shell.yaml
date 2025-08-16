@@ -1,0 +1,42 @@
+bodies: [BODY shell]
+joints: []
+volumes: []
+high resolution path: ../../assets/CoTrain/high_res/
+low resolution path: ../../assets/CoTrain/low_res/
+ignore inter-collision: true
+namespace: /ambf/env/
+
+BODY shell:
+  name: shell
+  mesh: test3_LapVR.obj
+  #collision mesh type: CONCAVE_MESH
+  collision groups: [25]
+  mass: 0.0
+  inertia:
+    ix: 0.0
+    iy: 0.0
+    iz: 0.0
+  #collision margin: 0.001
+  scale: 1 # this is probably not the right scale now, need to double check?
+  location:
+    position:
+      x: 0.0540782329
+      y: 0.30859353
+      z: 0.721775527
+    orientation:
+      r: 1.57
+      p: 0.0
+      y: 0.0
+  inertial offset:
+    position:
+      x: 0
+      y: 0
+      z: 0
+    orientation:
+      r: 0
+      p: 0
+      y: 0
+  passive: false
+  publish children names: false
+  publish joint names: false
+  publish joint positions: false

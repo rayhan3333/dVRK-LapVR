@@ -23,6 +23,9 @@ first_last_lin_hole_offset = Frame(Rotation.RPY(0, 0, 0), Vector(0., 0., 0.04))
 entry_hole_offset = Frame(Rotation.RPY(-pi_2, pi_2, 0), Vector(0, 0, 0))
 exit_hole_offset = Frame(Rotation.RPY(0, -pi_2, -pi_2), Vector(0, 0, 0))
 
+test_offset = Frame(Rotation.RPY(0, 0, 0), Vector(0., 0., 0.2))
+
+
 
 def task_1_verification(simulaiton_manager, team_name):
     time.sleep(0.5)
@@ -45,8 +48,8 @@ def move_needle_through_holes(simulation_manager, num_holes):
     entry_holes = []
     exit_holes = []
     for i in range(num_holes):
-        entry_holes.append(simulation_manager.get_obj_handle('Entry' + str(i + 1)))
-        exit_holes.append(simulation_manager.get_obj_handle('Exit' + str(i + 1)))
+        entry_holes.append(simulation_manager.get_obj_handle('/ambf/env/Entry' + str(i + 1)))
+        exit_holes.append(simulation_manager.get_obj_handle('/ambf/env/Exit' + str(i + 1)))
 
     time.sleep(0.3)
     world.reset_bodies()
@@ -58,7 +61,7 @@ def move_needle_through_holes(simulation_manager, num_holes):
         pose_control_points.append(entry_holes[i].get_pose() * first_last_lin_hole_offset * entry_hole_offset)
         pose_control_points.append(entry_holes[i].get_pose() * entry_hole_offset)
         pose_control_points.append(exit_holes[i].get_pose() * exit_hole_offset)
-        pose_control_points.append(exit_holes[i].get_pose() * first_last_lin_hole_offset * exit_hole_offset)
+        pose_control_points.append(exit_holes[i].get_pose() * test_offset * exit_hole_offset)
 
     interpolater = Interpolation()
 
