@@ -33,3 +33,5 @@ multibody configs:
   - "ADF/LapVR/contactsensor.yaml" #18
   - "ADF/PSMs/LND_420006/contactsensor1.yaml" #19
   - "ADF/PSMs/LND_420006/contactsensor2.yaml" #20
+  #LapVr Shell
+  - "ADF/CoTrain/shell.yaml"

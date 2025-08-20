@@ -9,7 +9,11 @@ import json
 
 #vars
 port = 48000
-UNITY_IP = "10.162.34.19"
+#UNITY_IP = "10.162.34.19"
+#UNITY_IP = "10.1.10.75"
+UNITY_IP = "192.168.1.106"
+
+
 
 #ambf setup
 _client = Client()
@@ -101,13 +105,16 @@ PSM2_JOINT_PORT = port + 22
 #helper function for updating AMBF PSM Joint States
 def update_js(obj, js_list):
     for i, js in enumerate(js_list):
-        obj.set_joint_pos(i, math.radians(js))
+        if i != 2:
+            obj.set_joint_pos(i, math.radians(js))
+        else:
+            obj.set_joint_pos(i, js)
 
-#broadcast IP to Hololens for 30 seconds
-for i in range(200):
-    sock.sendto(msg.encode(), (UNITY_IP, 47999))
-    print("sent ip")
-    time.sleep(0.1)
+# #broadcast IP to Hololens for 30 seconds
+# for i in range(200):
+#     sock.sendto(msg.encode(), (UNITY_IP, 47999))
+#     print("sent ip")
+#     time.sleep(0.1)
 
 print("entering main loop")
 prevjoints1 = [0, 0, 0, 0, 0, 0]
@@ -115,6 +122,9 @@ prevjoints2 = [0, 0, 0, 0, 0, 0]
 camera_rpy = [3.14, -1.04, 1.57]
 
 while True:
+    #Broadcast IP to Hololens
+    sock.sendto(msg.encode(), (UNITY_IP, 47999))
+
     shell_pos = shell.get_pos()
 
     #SUJ State / PSM RCM Position - Unity always Priority
@@ -203,15 +213,19 @@ while True:
         camera_f = []
 
     if len(camera_f) != 0:
-        print(camera_f)
-        pass
+        print(camera_f[5])
+        
         #print("SUJ1 recieved from Unity" + str(trans1))
-        camera.set_pos(-camera_f[2]+shell_pos.x-0.14, camera_f[0]+shell_pos.y-0.35, camera_f[1]+shell_pos.z-0.79)
-        camera.set_rpy(math.radians(camera_f[5])+camera_rpy[0], math.radians(camera_f[4])+1.57/2+camera_rpy[1], math.radians(camera_f[3])+camera_rpy[2])
+        camera.set_pos(-camera_f[2]+shell_pos.x-0.14, camera_f[0]+shell_pos.y-0.2, camera_f[1]+shell_pos.z-0.79)
+        #camera.set_pos(camera_f[2]+shell_pos.x, -camera_f[0]+shell_pos.y, camera_f[1]+shell_pos.z)
+
+        #psm1.set_pos(trans1[2]+shell_pos.x, -trans1[0]+shell_pos.y, trans1[1]+shell_pos.z)
+
+        camera.set_rpy(3.14, math.radians(camera_f[4])+1.57/2+camera_rpy[1], math.radians(camera_f[3])+camera_rpy[2])
     camera_pos = camera.get_pos()
     #print(psm1.get_pos())
-    light.set_pos(camera_pos.x, camera_pos.y, camera_pos.z)
-    print(light.get_pos())
+    #light.set_pos(camera_pos.x, camera_pos.y, camera_pos.z)
+    #print(light.get_pos())
     #print(camera.get_rpy())
     #send(psm1_joint_sock, [math.degrees(i) for i in psm1.get_all_joint_pos()[0:6]], UNITY_IP, PSM1_JOINT_PORT)
     #send(psm2_joint_sock, [math.degrees(i) for i in psm2.get_all_joint_pos()[0:6]], UNITY_IP, PSM2_JOINT_PORT)
